@@ -7,7 +7,9 @@ namespace Neo.Server
     internal class NeoServer : BaseServer
     {
         //public override void OnConnect(string clientId) { }
-        public override void OnConnect(Client client) { }
+        public override void OnConnect(Client client) {
+            Clients.Add(client);
+        }
 
         public override void OnDisconnect(string clientId, ushort code, string reason, bool wasClean) { }
 
