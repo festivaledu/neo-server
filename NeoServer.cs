@@ -17,7 +17,7 @@ namespace Neo.Server
         public override async Task OnError(string clientId, Exception ex, string message) { }
 
         public override async Task OnPackage(string clientId, Package package) {
-            Console.WriteLine(clientId + ": " + package.Content);
+            Console.WriteLine(clientId + ": " + package.GetContentTypesafe<string>());
         }
     }
 }
