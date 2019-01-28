@@ -66,6 +66,25 @@ namespace Neo.Server
                 Accounts.Add(user.Value.account);
                 Users.Add(user.Value.member);
 
+            } else if (package.Type == PackageType.Input) {
+
+                var input = package.GetContentTypesafe<string>();
+
+                // BUG: THIS SHALL BE DONE
+
+                SendPackageTo(Target.All.Remove(client.ClientId), new Package(PackageType.Message, new {
+                    identity = new Identity { Id = client.ClientId, Name = "Norbert Roqualla"},
+                    message = input,
+                    timestamp = DateTime.Now,
+                    messageType = "received"
+                }));
+
+                SendPackageTo(new Target(client.ClientId), new Package(PackageType.Message, new {
+                    identity = new Identity { Id = client.ClientId, Name = "Norbert Roqualla" },
+                    message = input,
+                    timestamp = DateTime.Now,
+                    messageType = "sent"
+                }));
             }
         }
         
@@ -90,12 +109,12 @@ namespace Neo.Server
             var client = Clients.Find(c => c.ClientId == clientId);
 
             var beforeReceivePackageEvent = new Before<ReceiveElementEventArgs<Package>>(new ReceiveElementEventArgs<Package>(client, package));
-            await EventService.RaiseEvent(EventType.BeforePackageReceive, beforeReceivePackageEvent);
+            //await EventService.RaiseEvent(EventType.BeforePackageReceive, beforeReceivePackageEvent);
 
             if (!beforeReceivePackageEvent.Cancel) {
                 await HandlePackage(client, package);
 
-                await EventService.RaiseEvent(EventType.PackageReceived, new ReceiveElementEventArgs<Package>(client, package));
+                //await EventService.RaiseEvent(EventType.PackageReceived, new ReceiveElementEventArgs<Package>(client, package));
             }
         }
     }
