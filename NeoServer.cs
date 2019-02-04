@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Neo.Core.Authentication;
+using Neo.Core.Authorization;
 using Neo.Core.Communication;
 using Neo.Core.Communication.Packages;
 using Neo.Core.Config;
 using Neo.Core.Extensibility;
 using Neo.Core.Extensibility.Events;
+using Neo.Core.Management;
 using Neo.Core.Networking;
 using Neo.Core.Shared;
 
@@ -16,7 +18,7 @@ namespace Neo.Server
         private async Task HandlePackage(Client client, Package package) {
             if (package.Type == PackageType.Debug) {
 
-                Console.WriteLine(client.ClientId + ": " + package.GetContentTypesafe<string>());
+                // Console.WriteLine(client.ClientId + ": " + package.GetContentTypesafe<string>());
                 SendPackageTo(new Target(client.ClientId), package);
 
             } else if (package.Type == PackageType.GuestLogin) {
@@ -26,11 +28,19 @@ namespace Neo.Server
                     return;
                 }
 
-                Authenticator.Authenticate(package.GetContentTypesafe<GuestLoginPackageContent>(), out var guest);
+                Authenticator.Authenticate(package.GetContentTypesafe<Identity>(), out var guest);
                 guest.Client = client;
                 Users.Add(guest);
 
+                Logger.Instance.Log(LogLevel.Debug, $"{guest.Identity.Name} joined (Id: {guest.Identity.Id})");
+
                 SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(guest.Identity)));
+
+                // TODO: ADD MORE STUFF
+                guest.Permissions.Add("neo.*", Permission.Allow);
+                Logger.Instance.Log(LogLevel.Debug, guest.Identity.Name + " tried to join #main: " + guest.OpenChannel(Channels[0]));
+
+
 
             } else if (package.Type == PackageType.MemberLogin) {
 
@@ -59,18 +69,19 @@ namespace Neo.Server
                 // BUG: THIS SHALL BE DONE
 
                 SendPackageTo(Target.All.Remove(client.ClientId), new Package(PackageType.Message, new {
-                    identity = new Identity { Id = client.ClientId, Name = "Norbert Roqualla" },
+                    identity = GetUser(client.ClientId).Identity,
                     message = input,
                     timestamp = DateTime.Now,
                     messageType = "received"
                 }));
 
                 SendPackageTo(new Target(client.ClientId), new Package(PackageType.Message, new {
-                    identity = new Identity { Id = client.ClientId, Name = "Norbert Roqualla" },
+                    identity = GetUser(client.ClientId).Identity,
                     message = input,
                     timestamp = DateTime.Now,
                     messageType = "sent"
                 }));
+
             } else if (package.Type == PackageType.Register) {
 
                 if (!ConfigManager.Instance.Values.RegistrationAllowed) {
@@ -103,6 +114,14 @@ namespace Neo.Server
 
             var client = Clients.Find(c => c.ClientId == clientId);
             Clients.Remove(client);
+
+            var user = GetUser(clientId);
+            if (user != null) {
+                user.LeaveChannel(Channels[0]);
+                Logger.Instance.Log(LogLevel.Debug, $"{user.Identity.Name} left (Id: {user.Identity.Id})");
+                Users.Remove(user);
+            }
+
             await EventService.RaiseEvent(EventType.Disconnected, new DisconnectEventArgs(client, code, reason, wasClean));
 
         }
