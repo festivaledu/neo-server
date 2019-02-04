@@ -27,7 +27,10 @@ namespace Neo.Server
                 }
 
                 Authenticator.Authenticate(package.GetContentTypesafe<GuestLoginPackageContent>(), out var guest);
+                guest.Client = client;
                 Users.Add(guest);
+
+                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(guest.Identity)));
 
             } else if (package.Type == PackageType.MemberLogin) {
 
@@ -38,6 +41,7 @@ namespace Neo.Server
                     return;
                 }
 
+                member.Client = client;
                 Users.Add(member);
                 
             } else if (package.Type == PackageType.Meta) {
@@ -47,7 +51,26 @@ namespace Neo.Server
                     Name = ConfigManager.Instance.Values.ServerName,
                     RegistrationAllowed = ConfigManager.Instance.Values.RegistrationAllowed
                 }));
-                
+
+            } else if (package.Type == PackageType.Input) {
+
+                var input = package.GetContentTypesafe<string>();
+
+                // BUG: THIS SHALL BE DONE
+
+                SendPackageTo(Target.All.Remove(client.ClientId), new Package(PackageType.Message, new {
+                    identity = new Identity { Id = client.ClientId, Name = "Norbert Roqualla" },
+                    message = input,
+                    timestamp = DateTime.Now,
+                    messageType = "received"
+                }));
+
+                SendPackageTo(new Target(client.ClientId), new Package(PackageType.Message, new {
+                    identity = new Identity { Id = client.ClientId, Name = "Norbert Roqualla" },
+                    message = input,
+                    timestamp = DateTime.Now,
+                    messageType = "sent"
+                }));
             } else if (package.Type == PackageType.Register) {
 
                 if (!ConfigManager.Instance.Values.RegistrationAllowed) {
@@ -66,25 +89,6 @@ namespace Neo.Server
                 Accounts.Add(user.Value.account);
                 Users.Add(user.Value.member);
 
-            } else if (package.Type == PackageType.Input) {
-
-                var input = package.GetContentTypesafe<string>();
-
-                // BUG: THIS SHALL BE DONE
-
-                SendPackageTo(Target.All.Remove(client.ClientId), new Package(PackageType.Message, new {
-                    identity = new Identity { Id = client.ClientId, Name = "Norbert Roqualla"},
-                    message = input,
-                    timestamp = DateTime.Now,
-                    messageType = "received"
-                }));
-
-                SendPackageTo(new Target(client.ClientId), new Package(PackageType.Message, new {
-                    identity = new Identity { Id = client.ClientId, Name = "Norbert Roqualla" },
-                    message = input,
-                    timestamp = DateTime.Now,
-                    messageType = "sent"
-                }));
             }
         }
         
