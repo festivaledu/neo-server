@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using Neo.Core.Extensibility;
 
 namespace Neo.Server
 {
@@ -9,8 +10,9 @@ namespace Neo.Server
 
         internal static void Main(string[] args) {
             server.Initialize(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json"), Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"data\"));
-
+            
             server.Start();
+
             Console.ReadLine();
             server.Stop();
 

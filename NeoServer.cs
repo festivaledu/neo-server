@@ -132,12 +132,12 @@ namespace Neo.Server
             var client = Clients.Find(c => c.ClientId == clientId);
 
             var beforeReceivePackageEvent = new Before<ReceiveElementEventArgs<Package>>(new ReceiveElementEventArgs<Package>(client, package));
-            //await EventService.RaiseEvent(EventType.BeforePackageReceive, beforeReceivePackageEvent);
+            await EventService.RaiseEvent(EventType.BeforePackageReceive, beforeReceivePackageEvent);
 
             if (!beforeReceivePackageEvent.Cancel) {
                 await HandlePackage(client, package);
 
-                //await EventService.RaiseEvent(EventType.PackageReceived, new ReceiveElementEventArgs<Package>(client, package));
+                await EventService.RaiseEvent(EventType.PackageReceived, new ReceiveElementEventArgs<Package>(client, package));
             }
         }
     }
