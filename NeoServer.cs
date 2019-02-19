@@ -66,21 +66,28 @@ namespace Neo.Server
 
                 var input = package.GetContentTypesafe<string>();
 
+                var beforeInputEvent = new Before<InputEventArgs>(new InputEventArgs(GetUser(client.ClientId), input));
+                EventService.RaiseEvent(EventType.BeforeInput, beforeInputEvent);
+
                 // BUG: THIS SHALL BE DONE
 
-                SendPackageTo(Target.All.Remove(client.ClientId), new Package(PackageType.Message, new {
-                    identity = GetUser(client.ClientId).Identity,
-                    message = input,
-                    timestamp = DateTime.Now,
-                    messageType = "received"
-                }));
+                if (!beforeInputEvent.Cancel) {
+                    SendPackageTo(Target.All.Remove(client.ClientId), new Package(PackageType.Message, new {
+                        identity = GetUser(client.ClientId).Identity,
+                        message = input,
+                        timestamp = DateTime.Now,
+                        messageType = "received"
+                    }));
 
-                SendPackageTo(new Target(client.ClientId), new Package(PackageType.Message, new {
-                    identity = GetUser(client.ClientId).Identity,
-                    message = input,
-                    timestamp = DateTime.Now,
-                    messageType = "sent"
-                }));
+                    SendPackageTo(new Target(client.ClientId), new Package(PackageType.Message, new {
+                        identity = GetUser(client.ClientId).Identity,
+                        message = input,
+                        timestamp = DateTime.Now,
+                        messageType = "sent"
+                    }));
+                }
+
+
 
             } else if (package.Type == PackageType.Register) {
 

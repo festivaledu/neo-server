@@ -9,7 +9,7 @@ namespace Neo.Server
         private static readonly NeoServer server = new NeoServer();
 
         internal static void Main(string[] args) {
-            server.Initialize(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json"), Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"data\"));
+            server.Initialize(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json"), Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"data\"), Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"plugins\"));
             
             server.Start();
 
