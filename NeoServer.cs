@@ -29,16 +29,14 @@ namespace Neo.Server
                 }
 
                 Authenticator.Authenticate(package.GetContentTypesafe<Identity>(), out var guest);
+                guest.Attributes.Add("instance.neo.usertype", "guest");
                 guest.Client = client;
                 Users.Add(guest);
 
                 Logger.Instance.Log(LogLevel.Debug, $"{guest.Identity.Name} joined (Id: {guest.Identity.Id})");
 
                 SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(guest.Identity)));
-
-                // TODO: FIX PERMISSIONS
-                guest.Permissions.Add("neo.*", Permission.Allow);
-
+                
 
 
             } else if (package.Type == PackageType.MemberLogin) {
@@ -108,6 +106,11 @@ namespace Neo.Server
 
             } else if (package.Type == PackageType.LoginFinished) {
                 var user = GetUser(client.ClientId);
+
+                if (user.Attributes.ContainsKey("instance.neo.usertype") && user.Attributes["instance.neo.usertype"].ToString() == "guest") {
+                    GroupManager.AddGuestToGroup(user as Guest);
+                }
+
                 Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(Channels[0]));
 
                 user.CreateChannel(new Channel {
