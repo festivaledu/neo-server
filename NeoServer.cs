@@ -52,7 +52,7 @@ namespace Neo.Server
 
                 member.Client = client;
                 Users.Add(member);
-                
+
             } else if (package.Type == PackageType.Meta) {
 
                 SendPackageTo(client.ClientId, new Package(PackageType.MetaResponse, new ServerMetaPackageContent {
@@ -109,6 +109,22 @@ namespace Neo.Server
             } else if (package.Type == PackageType.LoginFinished) {
                 var user = GetUser(client.ClientId);
                 Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(Channels[0]));
+
+                user.CreateChannel(new Channel {
+                    Id = user.Identity.Id,
+                    Name = user.Identity.Name,
+                    StatusMessage = "PENIS",
+                });
+
+                UserManager.RefreshUsers();
+            } else if (package.Type == PackageType.EnterChannel) {
+                // TODO: Move in front of if
+                var user = GetUser(client.ClientId);
+                var channel = Channels.Find(c => c.InternalId.ToString().Equals(package.GetContentTypesafe<string>()));
+
+                if (channel != null) {
+                    Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join " + channel.Name + ": " + user.OpenChannel(channel));
+                }
             }
         }
         
@@ -130,6 +146,8 @@ namespace Neo.Server
                 user.LeaveChannel(Channels[0]);
                 Logger.Instance.Log(LogLevel.Debug, $"{user.Identity.Name} left (Id: {user.Identity.Id})");
                 Users.Remove(user);
+
+                UserManager.RefreshUsers();
             }
 
             await EventService.RaiseEvent(EventType.Disconnected, new DisconnectEventArgs(client, code, reason, wasClean));
