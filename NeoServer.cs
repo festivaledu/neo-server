@@ -36,9 +36,8 @@ namespace Neo.Server
 
                 SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(guest.Identity)));
 
-                // TODO: ADD MORE STUFF
+                // TODO: FIX PERMISSIONS
                 guest.Permissions.Add("neo.*", Permission.Allow);
-                Logger.Instance.Log(LogLevel.Debug, guest.Identity.Name + " tried to join #main: " + guest.OpenChannel(Channels[0]));
 
 
 
@@ -107,11 +106,15 @@ namespace Neo.Server
                 Accounts.Add(user.Value.account);
                 Users.Add(user.Value.member);
 
+            } else if (package.Type == PackageType.LoginFinished) {
+                var user = GetUser(client.ClientId);
+                Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(Channels[0]));
             }
         }
         
         public override async Task OnConnect(Client client) {
-            
+
+            Logger.Instance.Log(LogLevel.Debug, "New connection received");
             Clients.Add(client);
             await EventService.RaiseEvent(EventType.Connected, new ConnectEventArgs(client));
             
@@ -142,7 +145,7 @@ namespace Neo.Server
             await EventService.RaiseEvent(EventType.BeforePackageReceive, beforeReceivePackageEvent);
 
             if (!beforeReceivePackageEvent.Cancel) {
-                await HandlePackage(client, package);
+                HandlePackage(client, package);
 
                 await EventService.RaiseEvent(EventType.PackageReceived, new ReceiveElementEventArgs<Package>(client, package));
             }
