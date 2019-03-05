@@ -15,7 +15,7 @@ namespace Neo.Server
 {
     internal class NeoServer : BaseServer
     {
-        private async Task HandlePackage(Client client, Package package) {
+        private void HandlePackage(Client client, Package package) {
             if (package.Type == PackageType.Debug) {
 
                 // Console.WriteLine(client.ClientId + ": " + package.GetContentTypesafe<string>());
@@ -43,13 +43,25 @@ namespace Neo.Server
 
                 var result = Authenticator.Authenticate(package.GetContentTypesafe<MemberLoginPackageContent>(), out var member);
 
-                if (result != AuthenticationResult.Success) {
-                    // TODO: Something went wrong on login
+                switch (result) {
+                case AuthenticationResult.UnknownUser:
+                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnknownUser()));
+                    return;
+                case AuthenticationResult.IncorrectPassword:
+                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetIncorrectPassword()));
+                    return;
+                case AuthenticationResult.ExistingSession:
+                    // TODO: Add correct existing session handling
+                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
 
                 member.Client = client;
                 Users.Add(member);
+
+                Logger.Instance.Log(LogLevel.Debug, $"{member.Identity.Name} joined (Id: {member.Identity.Id})");
+
+                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(member.Identity)));
 
             } else if (package.Type == PackageType.Meta) {
 
@@ -106,6 +118,7 @@ namespace Neo.Server
 
             } else if (package.Type == PackageType.LoginFinished) {
                 var user = GetUser(client.ClientId);
+                GroupManager.RefreshGroups();
                 UserManager.RefreshUsers();
 
                 if (user.Attributes.ContainsKey("instance.neo.usertype") && user.Attributes["instance.neo.usertype"].ToString() == "guest") {
@@ -114,11 +127,6 @@ namespace Neo.Server
 
                 Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(Channels[0]));
 
-                //user.CreateChannel(new Channel {
-                //    Id = user.Identity.Id,
-                //    Name = user.Identity.Name,
-                //    StatusMessage = "PENIS",
-                //});
             } else if (package.Type == PackageType.EnterChannel) {
                 // TODO: Make one shared user object in front of if
                 var user = GetUser(client.ClientId);
