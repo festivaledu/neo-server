@@ -106,6 +106,7 @@ namespace Neo.Server
 
             } else if (package.Type == PackageType.LoginFinished) {
                 var user = GetUser(client.ClientId);
+                UserManager.RefreshUsers();
 
                 if (user.Attributes.ContainsKey("instance.neo.usertype") && user.Attributes["instance.neo.usertype"].ToString() == "guest") {
                     GroupManager.AddGuestToGroup(user as Guest);
@@ -113,15 +114,13 @@ namespace Neo.Server
 
                 Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(Channels[0]));
 
-                user.CreateChannel(new Channel {
-                    Id = user.Identity.Id,
-                    Name = user.Identity.Name,
-                    StatusMessage = "PENIS",
-                });
-
-                UserManager.RefreshUsers();
+                //user.CreateChannel(new Channel {
+                //    Id = user.Identity.Id,
+                //    Name = user.Identity.Name,
+                //    StatusMessage = "PENIS",
+                //});
             } else if (package.Type == PackageType.EnterChannel) {
-                // TODO: Move in front of if
+                // TODO: Make one shared user object in front of if
                 var user = GetUser(client.ClientId);
                 var channel = Channels.Find(c => c.InternalId.ToString().Equals(package.GetContentTypesafe<string>()));
 
