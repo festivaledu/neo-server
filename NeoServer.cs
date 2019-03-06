@@ -128,6 +128,7 @@ namespace Neo.Server
                 user.Value.member.Client = client;
 
                 // BUG: Force Save on Register!
+                dataProvider.Save();
 
                 Logger.Instance.Log(LogLevel.Debug, $"{user.Value.member.Identity.Name} registered and joined (Id: {user.Value.member.Identity.Id})");
 
