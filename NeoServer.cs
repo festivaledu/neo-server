@@ -61,7 +61,7 @@ namespace Neo.Server
 
                 Logger.Instance.Log(LogLevel.Debug, $"{member.Identity.Name} joined (Id: {member.Identity.Id})");
 
-                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(member.Identity)));
+                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(member.Identity, member.Account)));
 
             } else if (package.Type == PackageType.Meta) {
 
@@ -128,11 +128,11 @@ namespace Neo.Server
                 user.Value.member.Client = client;
 
                 // BUG: Force Save on Register!
-                dataProvider.Save();
+                DataProvider.Save();
 
                 Logger.Instance.Log(LogLevel.Debug, $"{user.Value.member.Identity.Name} registered and joined (Id: {user.Value.member.Identity.Id})");
 
-                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(user.Value.member.Identity)));
+                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(user.Value.member.Identity, user.Value.account)));
 
 
             } else if (package.Type == PackageType.LoginFinished) {
