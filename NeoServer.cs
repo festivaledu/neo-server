@@ -160,6 +160,10 @@ namespace Neo.Server
                 }
             } else if (package.Type == PackageType.OpenSettings) {
                 new Target(client.ClientId).SendPackageTo(new Package(PackageType.OpenSettingsResponse, SettingsProvider.OpenSettings(package.GetContentTypesafe<string>())));
+            } else if (package.Type == PackageType.EditSettings) {
+                var data = package.GetContentTypesafe<SaveSettingsPackageContent>();
+
+                new Target(client.ClientId).SendPackageTo(new Package(PackageType.EditSettingsResponse, SettingsProvider.EditSettings(data.Scope, data.Model)));
             }
         }
         
