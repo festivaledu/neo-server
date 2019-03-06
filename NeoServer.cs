@@ -102,19 +102,34 @@ namespace Neo.Server
 
                 if (!ConfigManager.Instance.Values.RegistrationAllowed) {
                     // TODO: Registration not allowed
+                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
 
                 var result = Authenticator.Register(package.GetContentTypesafe<RegisterPackageContent>(), out var user);
 
-                if (result != AuthenticationResult.Success || !user.HasValue) {
-                    // TODO: Something went wrong on registering
+                if (!user.HasValue) {
+                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
                 
+                switch (result) {
+                case AuthenticationResult.EmailInUse:
+                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetEmailInUse()));
+                    return;
+                case AuthenticationResult.IdInUse:
+                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetIdInUse()));
+                    return;
+                }
+
                 // TODO: Maybe raise BeforeAccountCreateEvent
                 Accounts.Add(user.Value.account);
                 Users.Add(user.Value.member);
+
+                Logger.Instance.Log(LogLevel.Debug, $"{user.Value.member.Identity.Name} registered and joined (Id: {user.Value.member.Identity.Id})");
+
+                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(user.Value.member.Identity)));
+
 
             } else if (package.Type == PackageType.LoginFinished) {
                 var user = GetUser(client.ClientId);
@@ -135,6 +150,8 @@ namespace Neo.Server
                 if (channel != null) {
                     Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join " + channel.Name + ": " + user.OpenChannel(channel));
                 }
+            } else if (package.Type == PackageType.OpenSettings) {
+                new Target(client.ClientId).SendPackageTo(new Package(PackageType.OpenSettingsResponse, SettingsProvider.OpenSettings(package.GetContentTypesafe<string>())));
             }
         }
         
