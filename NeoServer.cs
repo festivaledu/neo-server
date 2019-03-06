@@ -125,6 +125,7 @@ namespace Neo.Server
                 // TODO: Maybe raise BeforeAccountCreateEvent
                 Accounts.Add(user.Value.account);
                 Users.Add(user.Value.member);
+                user.Value.member.Client = client;
 
                 // BUG: Force Save on Register!
 
