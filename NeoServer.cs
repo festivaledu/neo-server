@@ -107,11 +107,6 @@ namespace Neo.Server
                 }
 
                 var result = Authenticator.Register(package.GetContentTypesafe<RegisterPackageContent>(), out var user);
-
-                if (!user.HasValue) {
-                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
-                    return;
-                }
                 
                 switch (result) {
                 case AuthenticationResult.EmailInUse:
@@ -122,9 +117,16 @@ namespace Neo.Server
                     return;
                 }
 
+                if (!user.HasValue) {
+                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
+                    return;
+                }
+
                 // TODO: Maybe raise BeforeAccountCreateEvent
                 Accounts.Add(user.Value.account);
                 Users.Add(user.Value.member);
+
+                // BUG: Force Save on Register!
 
                 Logger.Instance.Log(LogLevel.Debug, $"{user.Value.member.Identity.Name} registered and joined (Id: {user.Value.member.Identity.Id})");
 
@@ -138,6 +140,10 @@ namespace Neo.Server
 
                 if (user.Attributes.ContainsKey("instance.neo.usertype") && user.Attributes["instance.neo.usertype"].ToString() == "guest") {
                     GroupManager.AddGuestToGroup(user as Guest);
+                }
+
+                if (user is Member member && member.Groups.Count == 0) {
+                    GroupManager.AddMemberToGroup(member, Groups[1]);
                 }
 
                 Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(Channels[0]));
@@ -190,6 +196,7 @@ namespace Neo.Server
             await EventService.RaiseEvent(EventType.BeforePackageReceive, beforeReceivePackageEvent);
 
             if (!beforeReceivePackageEvent.Cancel) {
+                Logger.Instance.Log(LogLevel.Info, "Package received: " + package.Type);
                 HandlePackage(client, package);
 
                 await EventService.RaiseEvent(EventType.PackageReceived, new ReceiveElementEventArgs<Package>(client, package));
