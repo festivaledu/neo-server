@@ -11,6 +11,7 @@ using Neo.Core.Extensibility.Events;
 using Neo.Core.Management;
 using Neo.Core.Networking;
 using Neo.Core.Shared;
+using Newtonsoft.Json;
 
 namespace Neo.Server
 {
@@ -191,6 +192,14 @@ namespace Neo.Server
                         member.Account.Email = data.Value.ToString();
                     } else if (data.Key == "password") {
                         // TODO: Check current password and set new one
+
+                        var passwords = JsonConvert.DeserializeObject<string[]>(JsonConvert.SerializeObject(data.Value));
+                        if (!member.Account.Password.SequenceEqual(Convert.FromBase64String(passwords[0]))) {
+                            user.ToTarget().SendPackageTo(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
+                            return;
+                        }
+
+                        member.Account.Password = Convert.FromBase64String(passwords[1]);
                     }
                 }
 
