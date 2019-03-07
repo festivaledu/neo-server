@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Neo.Core.Authentication;
 using Neo.Core.Authorization;
@@ -161,9 +162,42 @@ namespace Neo.Server
             } else if (package.Type == PackageType.OpenSettings) {
                 new Target(client.ClientId).SendPackageTo(new Package(PackageType.OpenSettingsResponse, SettingsProvider.OpenSettings(package.GetContentTypesafe<string>())));
             } else if (package.Type == PackageType.EditSettings) {
-                var data = package.GetContentTypesafe<SaveSettingsPackageContent>();
+                var data = package.GetContentTypesafe<EditSettingsPackageContent>();
 
                 new Target(client.ClientId).SendPackageTo(new Package(PackageType.EditSettingsResponse, SettingsProvider.EditSettings(data.Scope, data.Model)));
+            } else if (package.Type == PackageType.EditProfile) {
+                var data = package.GetContentTypesafe<EditProfilePackageContent>();
+                var user = GetUser(client.ClientId);
+                var member = user as Member;
+
+                if (data.Key == "name") {
+                    user.Identity.Name = data.Value.ToString();
+                }
+
+                if (member != null && data.Key != "name") {
+                    if (data.Key == "id") {
+                        if (data.Value.ToString().StartsWith("Guest-") || Accounts.Any(a => a.Identity.Id.Equals(data.Value.ToString()))) {
+                            user.ToTarget().SendPackageTo(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
+                            return;
+                        }
+
+                        member.Identity.Id = data.Value.ToString();
+                    } else if (data.Key == "email") {
+                        if (Accounts.Any(a => a.Email.Equals(data.Value.ToString()))) {
+                            user.ToTarget().SendPackageTo(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
+                            return;
+                        }
+
+                        member.Account.Email = data.Value.ToString();
+                    } else if (data.Key == "password") {
+                        // TODO: Check current password and set new one
+                    }
+                }
+
+                DataProvider.Save();
+
+                user.ToTarget().SendPackageTo(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(member?.Account, user.Identity, data)));
+                UserManager.RefreshUsers();
             }
         }
         
