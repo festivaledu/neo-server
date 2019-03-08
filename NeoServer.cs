@@ -147,7 +147,7 @@ namespace Neo.Server
                 }
 
                 if (user is Member member && member.Groups.Count == 0) {
-                    GroupManager.AddMemberToGroup(member, Groups[1]);
+                    GroupManager.AddMemberToGroup(member, GroupManager.GetUserGroup());
                 }
 
                 Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(Channels[0]));
