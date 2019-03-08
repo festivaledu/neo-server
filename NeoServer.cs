@@ -12,6 +12,9 @@ using Neo.Core.Management;
 using Neo.Core.Networking;
 using Neo.Core.Shared;
 using Newtonsoft.Json;
+using WebSocketSharp;
+using Logger = Neo.Core.Shared.Logger;
+using LogLevel = Neo.Core.Shared.LogLevel;
 
 namespace Neo.Server
 {
@@ -209,6 +212,21 @@ namespace Neo.Server
 
                 user.ToTarget().SendPackageTo(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(member?.Account, user.Identity, data)));
                 UserManager.RefreshUsers();
+            } else if (package.Type == PackageType.CreatePunishment) {
+                var data = package.GetContentTypesafe<CreatePunishmentPackageContent>();
+                var user = Users.Find(u => u.InternalId.Equals(data.Target));
+
+                // TODO: Check permissions
+
+                if (user == null) {
+                    return;
+                }
+
+                user.ToTarget().SendPackageTo(new Package(PackageType.DisconnectReason, data.Action));
+
+                if (data.Action == "kick") {
+                    user.Client.Socket.Close();
+                }
             }
         }
         
