@@ -152,6 +152,8 @@ namespace Neo.Server
 
                 Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(Channels[0]));
 
+                user.ToTarget().SendPackageTo(new Package(PackageType.KnownPermissionsUpdate, KnownPermissions));
+
             } else if (package.Type == PackageType.EnterChannel) {
                 // TODO: Make one shared user object in front of if
                 var user = GetUser(client.ClientId);
