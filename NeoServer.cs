@@ -231,6 +231,10 @@ namespace Neo.Server
                 Logger.Instance.Log(LogLevel.Debug, $"{user.Identity.Name} left (Id: {user.Identity.Id})");
                 Users.Remove(user);
 
+                if (user is Guest guest) {
+                    GroupManager.RemoveGuestFromGroup(guest);
+                }
+
                 UserManager.RefreshUsers();
             }
 
