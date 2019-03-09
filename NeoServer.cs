@@ -169,8 +169,11 @@ namespace Neo.Server
                 new Target(client.ClientId).SendPackageTo(new Package(PackageType.OpenSettingsResponse, SettingsProvider.OpenSettings(package.GetContentTypesafe<string>())));
             } else if (package.Type == PackageType.EditSettings) {
                 var data = package.GetContentTypesafe<EditSettingsPackageContent>();
+                var result = SettingsProvider.EditSettings(data.Scope, data.Model);
 
-                new Target(client.ClientId).SendPackageTo(new Package(PackageType.EditSettingsResponse, SettingsProvider.EditSettings(data.Scope, data.Model)));
+                if (data.Scope != "account") {
+                    new Target(client.ClientId).SendPackageTo(new Package(PackageType.EditSettingsResponse, result));
+                }
             } else if (package.Type == PackageType.EditProfile) {
                 var data = package.GetContentTypesafe<EditProfilePackageContent>();
                 var user = GetUser(client.ClientId);
