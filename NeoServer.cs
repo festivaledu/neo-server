@@ -79,24 +79,16 @@ namespace Neo.Server
             } else if (package.Type == PackageType.Input) {
 
                 var user = GetUser(client.ClientId);
-                var input = package.GetContentTypesafe<string>();
+                var data = package.GetContentTypesafe<InputPackageContent>();
 
-                var beforeInputEvent = new Before<InputEventArgs>(new InputEventArgs(user, input));
+                var beforeInputEvent = new Before<InputEventArgs>(new InputEventArgs(user, data.Input));
                 EventService.RaiseEvent(EventType.BeforeInput, beforeInputEvent);
 
                 // BUG: THIS SHALL BE DONE
 
                 if (!beforeInputEvent.Cancel) {
-                    var receivedMsg = new MessagePackageContent(user.Identity, input, DateTime.Now, "received", user.ActiveChannel.InternalId);
-                    var sentMsg = new MessagePackageContent(user.Identity, input, DateTime.Now, "sent", user.ActiveChannel.InternalId);
-
-                    if (input.Contains('@')) {
-                        var mentions = input.Split(' ').ToList().Where(s => s.StartsWith('@') && Users.Any(u => u.Identity.Id == s.Substring(1))).Select(s => s.Substring(1)).Distinct();
-                        new Target().AddMany(Users.FindAll(u => mentions.Contains(u.Identity.Id)).ToArray()).SendPackageTo(new Package(PackageType.Mention, receivedMsg));
-                    }
-
-                    SendPackageTo(new Target().AddMany(user.ActiveChannel).Remove(user), new Package(PackageType.Message, receivedMsg));
-                    SendPackageTo(new Target(user), new Package(PackageType.Message, sentMsg));
+                    var channel = Channels.Find(c => c.InternalId.Equals(data.TargetChannel));
+                    channel.AddMessage(user, data.Input);
                 }
 
             } else if (package.Type == PackageType.Register) {
@@ -229,6 +221,19 @@ namespace Neo.Server
                 if (data.Action == "kick") {
                     user.Client.Socket.Close();
                 }
+            } else if (package.Type == PackageType.CreateChannel) {
+                var data = package.GetContentTypesafe<CreateChannelPackageContent>();
+                var user = GetUser(client.ClientId);
+
+                var channel = new Channel {
+                    Id = data.Id,
+                    Lifetime = data.Lifetime,
+                    Limit = data.Limit,
+                    Name = data.Name,
+                    Password = data.Password
+                };
+
+                user.CreateChannel(channel);
             }
         }
         
