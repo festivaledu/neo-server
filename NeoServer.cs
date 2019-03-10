@@ -131,7 +131,7 @@ namespace Neo.Server
             } else if (package.Type == PackageType.LoginFinished) {
                 var user = GetUser(client.ClientId);
 
-                Target.All.SendPackageTo(new Package(PackageType.AccountListUpdate, Pool.Server.Accounts));
+                UserManager.RefreshAccounts();
 
                 GroupManager.RefreshGroups();
                 UserManager.RefreshUsers();
@@ -234,7 +234,7 @@ namespace Neo.Server
                     if (user is Member member) {
                         member.Account.Attributes["neo.banned"] = true;
                         DataProvider.Save();
-                        Target.All.SendPackageTo(new Package(PackageType.AccountListUpdate, Pool.Server.Accounts));
+                        UserManager.RefreshAccounts();
                     }
                 }
             } else if (package.Type == PackageType.CreateChannel) {
@@ -287,7 +287,7 @@ namespace Neo.Server
 
                 account.Attributes.Remove("neo.banned");
                 DataProvider.Save();
-                Target.All.SendPackageTo(new Package(PackageType.AccountListUpdate, Pool.Server.Accounts));
+                UserManager.RefreshAccounts();
             }
         }
         
