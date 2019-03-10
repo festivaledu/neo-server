@@ -151,10 +151,16 @@ namespace Neo.Server
             } else if (package.Type == PackageType.EnterChannel) {
                 // TODO: Make one shared user object in front of if
                 var user = GetUser(client.ClientId);
-                var channel = Channels.Find(c => c.InternalId.ToString().Equals(package.GetContentTypesafe<string>()));
+                var data = package.GetContentTypesafe<EnterChannelPackageContent>();
+                var channel = Channels.Find(c => c.InternalId.Equals(data.ChannelId));
 
                 if (channel != null) {
-                    Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join " + channel.Name + ": " + user.OpenChannel(channel));
+                    var result = user.OpenChannel(channel, data.Password);
+                    Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join " + channel.Name + ": " + result);
+
+                    if (result != ChannelActionResult.Success) {
+                        user.ToTarget().SendPackageTo(new Package(PackageType.EnterChannelResponse, new EnterChannelResponsePackageContent(result)));
+                    }
                 }
             } else if (package.Type == PackageType.OpenSettings) {
                 new Target(client.ClientId).SendPackageTo(new Package(PackageType.OpenSettingsResponse, SettingsProvider.OpenSettings(package.GetContentTypesafe<string>())));
