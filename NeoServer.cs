@@ -250,6 +250,15 @@ namespace Neo.Server
                 });
 
                 new Target(client.ClientId).SendPackageTo(new Package(PackageType.CreateGroupResponse, result));
+            } else if (package.Type == PackageType.DeleteGroup) {
+                var group = Groups.Find(g => g.InternalId == package.GetContentTypesafe<Guid>());
+
+                if (group == null) {
+                    new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteGroupResponse, "NotFound"));
+                    return;
+                }
+
+                new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteGroupResponse, GroupManager.DeleteGroup(group)));
             }
         }
         
