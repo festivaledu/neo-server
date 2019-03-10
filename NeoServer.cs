@@ -240,6 +240,16 @@ namespace Neo.Server
                 };
 
                 user.CreateChannel(channel);
+            } else if (package.Type == PackageType.CreateGroup) {
+                var data = package.GetContentTypesafe<CreateGroupPackageContent>();
+
+                var result = GroupManager.CreateGroup(new Group {
+                    Id = data.Id,
+                    Name = data.Name,
+                    SortValue = data.SortValue
+                });
+
+                new Target(client.ClientId).SendPackageTo(new Package(PackageType.CreateGroupResponse, result));
             }
         }
         
