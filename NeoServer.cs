@@ -144,7 +144,7 @@ namespace Neo.Server
                     GroupManager.AddMemberToGroup(member, GroupManager.GetUserGroup());
                 }
 
-                Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(Channels[0]));
+                Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(ChannelManager.GetMainChannel()));
 
                 user.ToTarget().SendPackageTo(new Package(PackageType.KnownPermissionsUpdate, KnownPermissions));
 
@@ -268,7 +268,7 @@ namespace Neo.Server
 
             var user = GetUser(clientId);
             if (user != null) {
-                user.LeaveChannel(Channels[0]);
+                user.LeaveChannel(ChannelManager.GetMainChannel());
                 Logger.Instance.Log(LogLevel.Debug, $"{user.Identity.Name} left (Id: {user.Identity.Id})");
                 Users.Remove(user);
 
