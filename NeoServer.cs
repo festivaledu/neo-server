@@ -29,7 +29,6 @@ namespace Neo.Server
             } else if (package.Type == PackageType.GuestLogin) {
 
                 if (!ConfigManager.Instance.Values.GuestsAllowed) {
-                    // TODO: Guests not allowed
                     return;
                 }
 
@@ -56,7 +55,6 @@ namespace Neo.Server
                     SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetIncorrectPassword()));
                     return;
                 case AuthenticationResult.ExistingSession:
-                    // TODO: Add correct existing session handling
                     SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
@@ -76,7 +74,7 @@ namespace Neo.Server
 
             } else if (package.Type == PackageType.Meta) {
 
-                SendPackageTo(client.ClientId, new Package(PackageType.MetaResponse, new ServerMetaPackageContent {
+                SendPackageTo(client.ClientId, new Package(PackageType.MetaResponse, new ServerMetaResponsePackageContent {
                     GuestsAllowed = ConfigManager.Instance.Values.GuestsAllowed,
                     Name = ConfigManager.Instance.Values.ServerName,
                     RegistrationAllowed = ConfigManager.Instance.Values.RegistrationAllowed
@@ -89,9 +87,7 @@ namespace Neo.Server
 
                 var beforeInputEvent = new Before<InputEventArgs>(new InputEventArgs(user, data.Input));
                 EventService.RaiseEvent(EventType.BeforeInput, beforeInputEvent);
-
-                // BUG: THIS SHALL BE DONE
-
+                
                 if (!beforeInputEvent.Cancel) {
                     var channel = Channels.Find(c => c.InternalId.Equals(data.TargetChannel));
                     channel.AddMessage(user, data.Input);
@@ -100,7 +96,6 @@ namespace Neo.Server
             } else if (package.Type == PackageType.Register) {
 
                 if (!ConfigManager.Instance.Values.RegistrationAllowed) {
-                    // TODO: Registration not allowed
                     SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
@@ -125,8 +120,7 @@ namespace Neo.Server
                 Accounts.Add(user.Value.account);
                 Users.Add(user.Value.member);
                 user.Value.member.Client = client;
-
-                // BUG: Force Save on Register!
+                
                 DataProvider.Save();
 
                 Logger.Instance.Log(LogLevel.Debug, $"{user.Value.member.Identity.Name} registered and joined (Id: {user.Value.member.Identity.Id})");
@@ -155,7 +149,6 @@ namespace Neo.Server
                 user.ToTarget().SendPackageTo(new Package(PackageType.KnownPermissionsUpdate, KnownPermissions));
 
             } else if (package.Type == PackageType.EnterChannel) {
-                // TODO: Make one shared user object in front of if
                 var user = GetUser(client.ClientId);
                 var data = package.GetContentTypesafe<EnterChannelPackageContent>();
                 var channel = Channels.Find(c => c.InternalId.Equals(data.ChannelId));
@@ -222,7 +215,10 @@ namespace Neo.Server
                 var data = package.GetContentTypesafe<CreatePunishmentPackageContent>();
                 var user = Users.Find(u => u.InternalId.Equals(data.Target));
 
-                // TODO: Check permissions
+                if (!GetUser(client.ClientId).IsAuthorized("neo.moderate." + data.Action)) {
+                    // TODO: Maybe send error back to client
+                    return;
+                }
 
                 if (user == null) {
                     return;
@@ -261,7 +257,7 @@ namespace Neo.Server
                     Id = data.Id,
                     Name = data.Name,
                     SortValue = data.SortValue
-                });
+                }, GetUser(client.ClientId));
 
                 new Target(client.ClientId).SendPackageTo(new Package(PackageType.CreateGroupResponse, result));
             } else if (package.Type == PackageType.DeleteGroup) {
@@ -272,7 +268,7 @@ namespace Neo.Server
                     return;
                 }
 
-                new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteGroupResponse, GroupManager.DeleteGroup(group)));
+                new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteGroupResponse, GroupManager.DeleteGroup(group, GetUser(client.ClientId))));
             } else if (package.Type == PackageType.DeleteChannel) {
                 var channel = Channels.Find(c => c.InternalId == package.GetContentTypesafe<Guid>());
 
