@@ -259,6 +259,15 @@ namespace Neo.Server
                 }
 
                 new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteGroupResponse, GroupManager.DeleteGroup(group)));
+            } else if (package.Type == PackageType.DeleteChannel) {
+                var channel = Channels.Find(c => c.InternalId == package.GetContentTypesafe<Guid>());
+
+                if (channel == null) {
+                    new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteChannelResponse, "NotFound"));
+                    return;
+                }
+
+                new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteChannelResponse, channel.DeleteChannel(GetUser(client.ClientId)) ? "Success" : "NotAllowed"));
             }
         }
         
