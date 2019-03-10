@@ -61,6 +61,12 @@ namespace Neo.Server
                     return;
                 }
 
+                if (member.Account.Attributes.ContainsKey("neo.banned") && (bool) member.Account.Attributes["neo.banned"]) {
+                    Logger.Instance.Log(LogLevel.Warn, $"{member.Identity.Name} tried to join (Id: {member.Identity.Id}) but is banned.");
+                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
+                    return;
+                }
+
                 member.Client = client;
                 Users.Add(member);
 
@@ -226,6 +232,14 @@ namespace Neo.Server
 
                 if (data.Action == "kick") {
                     user.Client.Socket.Close();
+                } else if (data.Action == "ban") {
+                    user.Client.Socket.Close();
+
+                    if (user is Member member) {
+                        member.Account.Attributes["neo.banned"] = true;
+                        DataProvider.Save();
+                        Target.All.SendPackageTo(new Package(PackageType.AccountListUpdate, Pool.Server.Accounts));
+                    }
                 }
             } else if (package.Type == PackageType.CreateChannel) {
                 var data = package.GetContentTypesafe<CreateChannelPackageContent>();
@@ -268,6 +282,16 @@ namespace Neo.Server
                 }
 
                 new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteChannelResponse, channel.DeleteChannel(GetUser(client.ClientId)) ? "Success" : "NotAllowed"));
+            } else if (package.Type == PackageType.DeletePunishment) {
+                var account = Accounts.Find(a => a.InternalId.Equals(package.GetContentTypesafe<Guid>()));
+
+                if (account == null) {
+                    return;
+                }
+
+                account.Attributes.Remove("neo.banned");
+                DataProvider.Save();
+                Target.All.SendPackageTo(new Package(PackageType.AccountListUpdate, Pool.Server.Accounts));
             }
         }
         
