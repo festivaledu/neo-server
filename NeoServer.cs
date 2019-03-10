@@ -78,30 +78,26 @@ namespace Neo.Server
 
             } else if (package.Type == PackageType.Input) {
 
+                var user = GetUser(client.ClientId);
                 var input = package.GetContentTypesafe<string>();
 
-                var beforeInputEvent = new Before<InputEventArgs>(new InputEventArgs(GetUser(client.ClientId), input));
+                var beforeInputEvent = new Before<InputEventArgs>(new InputEventArgs(user, input));
                 EventService.RaiseEvent(EventType.BeforeInput, beforeInputEvent);
 
                 // BUG: THIS SHALL BE DONE
 
                 if (!beforeInputEvent.Cancel) {
-                    SendPackageTo(Target.All.Remove(client.ClientId), new Package(PackageType.Message, new {
-                        identity = GetUser(client.ClientId).Identity,
-                        message = input,
-                        timestamp = DateTime.Now,
-                        messageType = "received"
-                    }));
+                    var receivedMsg = new MessagePackageContent(user.Identity, input, DateTime.Now, "received", user.ActiveChannel.InternalId);
+                    var sentMsg = new MessagePackageContent(user.Identity, input, DateTime.Now, "sent", user.ActiveChannel.InternalId);
 
-                    SendPackageTo(new Target(client.ClientId), new Package(PackageType.Message, new {
-                        identity = GetUser(client.ClientId).Identity,
-                        message = input,
-                        timestamp = DateTime.Now,
-                        messageType = "sent"
-                    }));
+                    if (input.Contains('@')) {
+                        var mentions = input.Split(' ').ToList().Where(s => s.StartsWith('@') && Users.Any(u => u.Identity.Id == s.Substring(1))).Select(s => s.Substring(1)).Distinct();
+                        new Target().AddMany(Users.FindAll(u => mentions.Contains(u.Identity.Id)).ToArray()).SendPackageTo(new Package(PackageType.Mention, receivedMsg));
+                    }
+
+                    SendPackageTo(new Target().AddMany(user.ActiveChannel).Remove(user), new Package(PackageType.Message, receivedMsg));
+                    SendPackageTo(new Target(user), new Package(PackageType.Message, sentMsg));
                 }
-
-
 
             } else if (package.Type == PackageType.Register) {
 
@@ -142,6 +138,9 @@ namespace Neo.Server
 
             } else if (package.Type == PackageType.LoginFinished) {
                 var user = GetUser(client.ClientId);
+
+                Target.All.SendPackageTo(new Package(PackageType.AccountListUpdate, Pool.Server.Accounts));
+
                 GroupManager.RefreshGroups();
                 UserManager.RefreshUsers();
 
