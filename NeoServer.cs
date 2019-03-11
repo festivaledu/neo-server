@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Neo.Core.Authentication;
@@ -288,6 +289,23 @@ namespace Neo.Server
                 account.Attributes.Remove("neo.banned");
                 DataProvider.Save();
                 UserManager.RefreshAccounts();
+            } else if (package.Type == PackageType.SetAvatar) {
+                var data = package.GetContentTypesafe<AvatarPackageContent>();
+                var user = GetUser(client.ClientId);
+
+                var avatarsPath = Path.Combine(dataPath, @"avatars");
+                foreach (var file in new DirectoryInfo(avatarsPath).EnumerateFiles(user.InternalId + ".*")) {
+                    file.Delete();
+                }
+
+                File.WriteAllBytes(Path.Combine(avatarsPath, user.InternalId + data.FileExtension), data.Avatar);
+                data.Avatar = null;
+
+                user.Identity.AvatarFileExtension = data.FileExtension;
+                user.Attributes["neo.avatar.updated"] = DateTime.Now;
+
+                UserManager.RefreshAccounts();
+                UserManager.RefreshUsers();
             }
         }
         
