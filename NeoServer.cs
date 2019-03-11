@@ -13,9 +13,6 @@ using Neo.Core.Management;
 using Neo.Core.Networking;
 using Neo.Core.Shared;
 using Newtonsoft.Json;
-using WebSocketSharp;
-using Logger = Neo.Core.Shared.Logger;
-using LogLevel = Neo.Core.Shared.LogLevel;
 
 namespace Neo.Server
 {
@@ -24,8 +21,7 @@ namespace Neo.Server
         private void HandlePackage(Client client, Package package) {
             if (package.Type == PackageType.Debug) {
 
-                // Console.WriteLine(client.ClientId + ": " + package.GetContentTypesafe<string>());
-                SendPackageTo(new Target(client.ClientId), package);
+                Logger.Instance.Log(LogLevel.Debug, $"{client.ClientId}: {package.GetContentTypesafe<object>()}");
 
             } else if (package.Type == PackageType.GuestLogin) {
 
@@ -34,15 +30,16 @@ namespace Neo.Server
                 }
 
                 Authenticator.Authenticate(package.GetContentTypesafe<Identity>(), out var guest);
+
                 guest.Attributes.Add("instance.neo.usertype", "guest");
                 guest.Client = client;
                 Users.Add(guest);
 
-                Logger.Instance.Log(LogLevel.Debug, $"{guest.Identity.Name} joined (Id: {guest.Identity.Id})");
+                Logger.Instance.Log(LogLevel.Info, $"{guest.Identity.Name} (Id: {guest.Identity.Id}) joined the server.");
 
-                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(guest.Identity)));
-                
+                EventService.RaiseEvent(EventType.ServerJoined, new JoinElementEventArgs<BaseServer>(guest, this));
 
+                SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(guest.Identity)));
 
             } else if (package.Type == PackageType.MemberLogin) {
 
@@ -50,32 +47,34 @@ namespace Neo.Server
 
                 switch (result) {
                 case AuthenticationResult.UnknownUser:
-                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnknownUser()));
+                    SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnknownUser()));
                     return;
                 case AuthenticationResult.IncorrectPassword:
-                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetIncorrectPassword()));
+                    SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetIncorrectPassword()));
                     return;
                 case AuthenticationResult.ExistingSession:
-                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
+                    SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
 
                 if (member.Account.Attributes.ContainsKey("neo.banned") && (bool) member.Account.Attributes["neo.banned"]) {
-                    Logger.Instance.Log(LogLevel.Warn, $"{member.Identity.Name} tried to join (Id: {member.Identity.Id}) but is banned.");
-                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
+                    Logger.Instance.Log(LogLevel.Warn, $"{member.Identity.Name} (Id: {member.Identity.Id}) tried to join the server but is banned.");
+                    SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
 
                 member.Client = client;
                 Users.Add(member);
 
-                Logger.Instance.Log(LogLevel.Debug, $"{member.Identity.Name} joined (Id: {member.Identity.Id})");
+                Logger.Instance.Log(LogLevel.Info, $"{member.Identity.Name} (Id: {member.Identity.Id}) joined the server.");
 
-                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(member.Identity, member.Account)));
+                EventService.RaiseEvent(EventType.ServerJoined, new JoinElementEventArgs<BaseServer>(member, this));
+
+                SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(member.Identity, member.Account)));
 
             } else if (package.Type == PackageType.Meta) {
 
-                SendPackageTo(client.ClientId, new Package(PackageType.MetaResponse, new ServerMetaResponsePackageContent {
+                SendPackageTo(client, new Package(PackageType.MetaResponse, new ServerMetaResponsePackageContent {
                     GuestsAllowed = ConfigManager.Instance.Values.GuestsAllowed,
                     Name = ConfigManager.Instance.Values.ServerName,
                     RegistrationAllowed = ConfigManager.Instance.Values.RegistrationAllowed
@@ -83,57 +82,62 @@ namespace Neo.Server
 
             } else if (package.Type == PackageType.Input) {
 
-                var user = GetUser(client.ClientId);
+                var user = GetUser(client);
                 var data = package.GetContentTypesafe<InputPackageContent>();
 
                 var beforeInputEvent = new Before<InputEventArgs>(new InputEventArgs(user, data.Input));
                 EventService.RaiseEvent(EventType.BeforeInput, beforeInputEvent);
-                
+
                 if (!beforeInputEvent.Cancel) {
-                    var channel = Channels.Find(c => c.InternalId.Equals(data.TargetChannel));
+                    var channel = Channels.Find(_ => _.InternalId.Equals(data.TargetChannel));
                     channel.AddMessage(user, data.Input);
                 }
 
             } else if (package.Type == PackageType.Register) {
 
                 if (!ConfigManager.Instance.Values.RegistrationAllowed) {
-                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
+                    SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
 
                 var result = Authenticator.Register(package.GetContentTypesafe<RegisterPackageContent>(), out var user);
-                
+
                 switch (result) {
                 case AuthenticationResult.EmailInUse:
-                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetEmailInUse()));
+                    SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetEmailInUse()));
                     return;
                 case AuthenticationResult.IdInUse:
-                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetIdInUse()));
+                    SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetIdInUse()));
                     return;
                 }
 
                 if (!user.HasValue) {
-                    SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
+                    SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
 
-                // TODO: Maybe raise BeforeAccountCreateEvent
-                Accounts.Add(user.Value.account);
-                Users.Add(user.Value.member);
-                user.Value.member.Client = client;
-                
-                DataProvider.Save();
+                var beforeAccountCreateEvent = new Before<CreateElementEventArgs<Account>>(new CreateElementEventArgs<Account>(user.Value.Member, user.Value.Account));
+                EventService.RaiseEvent(EventType.BeforeAccountCreate, beforeAccountCreateEvent);
 
-                Logger.Instance.Log(LogLevel.Debug, $"{user.Value.member.Identity.Name} registered and joined (Id: {user.Value.member.Identity.Id})");
+                if (!beforeAccountCreateEvent.Cancel) {
+                    Accounts.Add(user.Value.Account);
+                    Users.Add(user.Value.Member);
+                    user.Value.Member.Client = client;
 
-                SendPackageTo(client.ClientId, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(user.Value.member.Identity, user.Value.account)));
+                    DataProvider.Save();
 
+                    Logger.Instance.Log(LogLevel.Info, $"{user.Value.Member.Identity.Name} (Id: {user.Value.Member.Identity.Id}) registered and joined the server.");
+
+                    EventService.RaiseEvent(EventType.AccountCreated, new CreateElementEventArgs<Account>(user.Value.Member, user.Value.Account));
+
+                    SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetSuccessful(user.Value.Member.Identity, user.Value.Account)));
+                }
 
             } else if (package.Type == PackageType.LoginFinished) {
-                var user = GetUser(client.ClientId);
+
+                var user = GetUser(client);
 
                 UserManager.RefreshAccounts();
-
                 GroupManager.RefreshGroups();
                 UserManager.RefreshUsers();
 
@@ -145,35 +149,44 @@ namespace Neo.Server
                     GroupManager.AddMemberToGroup(member, GroupManager.GetUserGroup());
                 }
 
-                Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join #main: " + user.OpenChannel(ChannelManager.GetMainChannel()));
+                EventService.RaiseEvent(EventType.Login, new LoginEventArgs(user));
 
-                user.ToTarget().SendPackageTo(new Package(PackageType.KnownPermissionsUpdate, KnownPermissions));
+                user.OpenChannel(ChannelManager.GetMainChannel());
+
+                SendPackageTo(client, new Package(PackageType.KnownPermissionsUpdate, KnownPermissions));
 
             } else if (package.Type == PackageType.EnterChannel) {
-                var user = GetUser(client.ClientId);
+
+                var user = GetUser(client);
                 var data = package.GetContentTypesafe<EnterChannelPackageContent>();
-                var channel = Channels.Find(c => c.InternalId.Equals(data.ChannelId));
+                var channel = Channels.Find(_ => _.InternalId.Equals(data.ChannelId));
 
                 if (channel != null) {
                     var result = user.OpenChannel(channel, data.Password);
-                    Logger.Instance.Log(LogLevel.Debug, user.Identity.Name + " tried to join " + channel.Name + ": " + result);
 
                     if (result != ChannelActionResult.Success) {
-                        user.ToTarget().SendPackageTo(new Package(PackageType.EnterChannelResponse, new EnterChannelResponsePackageContent(result)));
+                        SendPackageTo(client, new Package(PackageType.EnterChannelResponse, new EnterChannelResponsePackageContent(result)));
                     }
                 }
+
             } else if (package.Type == PackageType.OpenSettings) {
-                new Target(client.ClientId).SendPackageTo(new Package(PackageType.OpenSettingsResponse, SettingsProvider.OpenSettings(package.GetContentTypesafe<string>())));
+
+                SendPackageTo(client, new Package(PackageType.OpenSettingsResponse, SettingsProvider.OpenSettings(package.GetContentTypesafe<string>())));
+
             } else if (package.Type == PackageType.EditSettings) {
+
+                var user = GetUser(client);
                 var data = package.GetContentTypesafe<EditSettingsPackageContent>();
-                var result = SettingsProvider.EditSettings(data.Scope, data.Model);
+                var result = SettingsProvider.EditSettings(data.Scope, data.Model, user);
 
                 if (data.Scope != "account") {
-                    new Target(client.ClientId).SendPackageTo(new Package(PackageType.EditSettingsResponse, result));
+                    SendPackageTo(client, new Package(PackageType.EditSettingsResponse, result));
                 }
+
             } else if (package.Type == PackageType.EditProfile) {
+
+                var user = GetUser(client);
                 var data = package.GetContentTypesafe<EditProfilePackageContent>();
-                var user = GetUser(client.ClientId);
                 var member = user as Member;
 
                 if (data.Key == "name") {
@@ -183,14 +196,14 @@ namespace Neo.Server
                 if (member != null && data.Key != "name") {
                     if (data.Key == "id") {
                         if (data.Value.ToString().StartsWith("Guest-") || Accounts.Any(a => a.Identity.Id.Equals(data.Value.ToString()))) {
-                            user.ToTarget().SendPackageTo(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
+                            user.ToTarget().SendPackage(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
                             return;
                         }
 
                         member.Identity.Id = data.Value.ToString();
                     } else if (data.Key == "email") {
                         if (Accounts.Any(a => a.Email.Equals(data.Value.ToString()))) {
-                            user.ToTarget().SendPackageTo(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
+                            user.ToTarget().SendPackage(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
                             return;
                         }
 
@@ -200,47 +213,69 @@ namespace Neo.Server
 
                         var passwords = JsonConvert.DeserializeObject<string[]>(JsonConvert.SerializeObject(data.Value));
                         if (!member.Account.Password.SequenceEqual(Convert.FromBase64String(passwords[0]))) {
-                            user.ToTarget().SendPackageTo(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
+                            user.ToTarget().SendPackage(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
                             return;
                         }
 
                         member.Account.Password = Convert.FromBase64String(passwords[1]);
+                    } else {
+                        return;
                     }
                 }
 
                 DataProvider.Save();
 
-                user.ToTarget().SendPackageTo(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(member?.Account, user.Identity, data)));
-                UserManager.RefreshUsers();
-            } else if (package.Type == PackageType.CreatePunishment) {
-                var data = package.GetContentTypesafe<CreatePunishmentPackageContent>();
-                var user = Users.Find(u => u.InternalId.Equals(data.Target));
+                if (member != null && data.Key != "name" && data.Key != "id") {
+                    EventService.RaiseEvent(EventType.AccountEdited, new EditElementEventArgs<Account>(user, member.Account));
+                } else {
+                    EventService.RaiseEvent(EventType.IdentityEdited, new EditElementEventArgs<Identity>(user, user.Identity));
+                }
 
-                if (!GetUser(client.ClientId).IsAuthorized("neo.moderate." + data.Action)) {
+                SendPackageTo(client, new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(member?.Account, user.Identity, data)));
+
+                UserManager.RefreshUsers();
+
+            } else if (package.Type == PackageType.CreatePunishment) {
+
+                var user = GetUser(client);
+                var data = package.GetContentTypesafe<CreatePunishmentPackageContent>();
+                var target = Users.Find(_ => _.InternalId.Equals(data.Target));
+
+                if (!user.IsAuthorized("neo.moderate." + data.Action)) {
                     // TODO: Maybe send error back to client
                     return;
                 }
 
-                if (user == null) {
+                if (target == null) {
                     return;
                 }
 
-                user.ToTarget().SendPackageTo(new Package(PackageType.DisconnectReason, data.Action));
+                SendPackageTo(target.Client, new Package(PackageType.DisconnectReason, data.Action));
 
-                if (data.Action == "kick") {
-                    user.Client.Socket.Close();
-                } else if (data.Action == "ban") {
-                    user.Client.Socket.Close();
+                switch (data.Action) {
+                case "kick":
+                    target.Client.Socket.Close();
 
-                    if (user is Member member) {
+                    break;
+                case "ban":
+                    target.Client.Socket.Close();
+
+                    if (target is Member member) {
                         member.Account.Attributes["neo.banned"] = true;
                         DataProvider.Save();
+
                         UserManager.RefreshAccounts();
                     }
+
+                    break;
                 }
+
+                // TODO: Maybe add punishment event
+
             } else if (package.Type == PackageType.CreateChannel) {
+
+                var user = GetUser(client);
                 var data = package.GetContentTypesafe<CreateChannelPackageContent>();
-                var user = GetUser(client.ClientId);
 
                 var channel = new Channel {
                     Id = data.Id,
@@ -250,48 +285,102 @@ namespace Neo.Server
                     Password = data.Password
                 };
 
-                user.CreateChannel(channel);
+                var beforeChannelCreateEvent = new Before<CreateElementEventArgs<Channel>>(new CreateElementEventArgs<Channel>(user, channel));
+                EventService.RaiseEvent(EventType.BeforeChannelCreate, beforeChannelCreateEvent);
+
+                if (!beforeChannelCreateEvent.Cancel) {
+                    user.CreateChannel(channel);
+                }
+
+                EventService.RaiseEvent(EventType.ChannelCreated, new CreateElementEventArgs<Channel>(user, channel));
+
             } else if (package.Type == PackageType.CreateGroup) {
+
+                var user = GetUser(client);
                 var data = package.GetContentTypesafe<CreateGroupPackageContent>();
 
-                var result = GroupManager.CreateGroup(new Group {
+                var group = new Group {
                     Id = data.Id,
                     Name = data.Name,
                     SortValue = data.SortValue
-                }, GetUser(client.ClientId));
+                };
 
-                new Target(client.ClientId).SendPackageTo(new Package(PackageType.CreateGroupResponse, result));
+                var beforeGroupCreateEvent = new Before<CreateElementEventArgs<Group>>(new CreateElementEventArgs<Group>(user, group));
+                EventService.RaiseEvent(EventType.BeforeGroupCreate, beforeGroupCreateEvent);
+
+                if (!beforeGroupCreateEvent.Cancel) {
+                    var result = GroupManager.CreateGroup(group, GetUser(client.ClientId));
+
+                    SendPackageTo(client, new Package(PackageType.CreateGroupResponse, result));
+
+                    EventService.RaiseEvent(EventType.GroupCreated, new CreateElementEventArgs<Group>(user, group));
+                }
+
             } else if (package.Type == PackageType.DeleteGroup) {
-                var group = Groups.Find(g => g.InternalId == package.GetContentTypesafe<Guid>());
+
+                var user = GetUser(client);
+                var group = Groups.Find(_ => _.InternalId == package.GetContentTypesafe<Guid>());
 
                 if (group == null) {
-                    new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteGroupResponse, "NotFound"));
+                    SendPackageTo(client, new Package(PackageType.DeleteGroupResponse, "NotFound"));
                     return;
                 }
 
-                new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteGroupResponse, GroupManager.DeleteGroup(group, GetUser(client.ClientId))));
+                var beforeGroupRemoveEvent = new Before<RemoveElementEventArgs<Group>>(new RemoveElementEventArgs<Group>(user, group));
+                EventService.RaiseEvent(EventType.BeforeGroupRemove, beforeGroupRemoveEvent);
+
+                if (!beforeGroupRemoveEvent.Cancel) {
+                    var result = GroupManager.DeleteGroup(group, user);
+
+                    SendPackageTo(client, new Package(PackageType.DeleteGroupResponse, result));
+
+                    EventService.RaiseEvent(EventType.GroupRemoved, new RemoveElementEventArgs<Group>(user, group));
+                }
+
             } else if (package.Type == PackageType.DeleteChannel) {
-                var channel = Channels.Find(c => c.InternalId == package.GetContentTypesafe<Guid>());
+
+                var user = GetUser(client);
+                var channel = Channels.Find(_ => _.InternalId == package.GetContentTypesafe<Guid>());
 
                 if (channel == null) {
-                    new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteChannelResponse, "NotFound"));
+                    SendPackageTo(client, new Package(PackageType.DeleteChannelResponse, "NotFound"));
                     return;
                 }
 
-                new Target(client.ClientId).SendPackageTo(new Package(PackageType.DeleteChannelResponse, channel.DeleteChannel(GetUser(client.ClientId)) ? "Success" : "NotAllowed"));
+                var beforeChannelRemoveEvent = new Before<RemoveElementEventArgs<Channel>>(new RemoveElementEventArgs<Channel>(user, channel));
+                EventService.RaiseEvent(EventType.BeforeChannelRemove, beforeChannelRemoveEvent);
+
+                if (!beforeChannelRemoveEvent.Cancel) {
+                    var result = channel.DeleteChannel(user);
+
+                    SendPackageTo(client, new Package(PackageType.DeleteChannelResponse, result ? "Success" : "NotAllowed"));
+
+                    EventService.RaiseEvent(EventType.ChannelRemoved, new RemoveElementEventArgs<Channel>(user, channel));
+                }
+
             } else if (package.Type == PackageType.DeletePunishment) {
+
+                var user = GetUser(client);
                 var account = Accounts.Find(a => a.InternalId.Equals(package.GetContentTypesafe<Guid>()));
 
                 if (account == null) {
                     return;
                 }
 
+                if (!user.IsAuthorized("neo.punishments.delete")) {
+                    // TODO: Inform user
+                    return;
+                }
+
                 account.Attributes.Remove("neo.banned");
                 DataProvider.Save();
+
                 UserManager.RefreshAccounts();
+
             } else if (package.Type == PackageType.SetAvatar) {
+
+                var user = GetUser(client);
                 var data = package.GetContentTypesafe<AvatarPackageContent>();
-                var user = GetUser(client.ClientId);
 
                 var avatarsPath = Path.Combine(dataPath, @"avatars");
                 foreach (var file in new DirectoryInfo(avatarsPath).EnumerateFiles(user.InternalId + ".*")) {
@@ -304,17 +393,18 @@ namespace Neo.Server
                 user.Identity.AvatarFileExtension = data.FileExtension;
                 user.Attributes["neo.avatar.updated"] = DateTime.Now;
 
+                EventService.RaiseEvent(EventType.AccountEdited, new EditElementEventArgs<Account>(user, (user as Member).Account));
+
                 UserManager.RefreshAccounts();
                 UserManager.RefreshUsers();
+
             }
         }
-        
-        public override async Task OnConnect(Client client) {
 
+        public override async Task OnConnect(Client client) {
             Logger.Instance.Log(LogLevel.Debug, "New connection received");
             Clients.Add(client);
             await EventService.RaiseEvent(EventType.Connected, new ConnectEventArgs(client));
-            
         }
 
         public override async Task OnDisconnect(string clientId, ushort code, string reason, bool wasClean) {

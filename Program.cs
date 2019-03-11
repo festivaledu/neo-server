@@ -30,7 +30,7 @@ namespace Neo.Server
             server.Initialize(configPath, dataPath, pluginPath);
             server.Start();
 
-            var webServer = new WebServer(avatarPath, 43430);
+            var webServer = new HttpServer(avatarPath, 43430);
 
             Console.ReadLine();
 
