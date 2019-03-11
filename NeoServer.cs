@@ -13,6 +13,7 @@ using Neo.Core.Management;
 using Neo.Core.Networking;
 using Neo.Core.Shared;
 using Newtonsoft.Json;
+using WebSocketSharp.Server;
 
 namespace Neo.Server
 {
@@ -35,7 +36,7 @@ namespace Neo.Server
                 guest.Client = client;
                 Users.Add(guest);
 
-                Logger.Instance.Log(LogLevel.Info, $"{guest.Identity.Name} (Id: {guest.Identity.Id}) joined the server.");
+                Logger.Instance.Log(LogLevel.Info, $"{guest.Identity.Name} (@{guest.Identity.Id}) joined the server.");
 
                 EventService.RaiseEvent(EventType.ServerJoined, new JoinElementEventArgs<BaseServer>(guest, this));
 
@@ -58,7 +59,7 @@ namespace Neo.Server
                 }
 
                 if (member.Account.Attributes.ContainsKey("neo.banned") && (bool) member.Account.Attributes["neo.banned"]) {
-                    Logger.Instance.Log(LogLevel.Warn, $"{member.Identity.Name} (Id: {member.Identity.Id}) tried to join the server but is banned.");
+                    Logger.Instance.Log(LogLevel.Warn, $"{member.Identity.Name} (@{member.Identity.Id}) tried to join the server but is banned.");
                     SendPackageTo(client, new Package(PackageType.LoginResponse, LoginResponsePackageContent.GetUnauthorized()));
                     return;
                 }
@@ -66,7 +67,7 @@ namespace Neo.Server
                 member.Client = client;
                 Users.Add(member);
 
-                Logger.Instance.Log(LogLevel.Info, $"{member.Identity.Name} (Id: {member.Identity.Id}) joined the server.");
+                Logger.Instance.Log(LogLevel.Info, $"{member.Identity.Name} (@{member.Identity.Id}) joined the server.");
 
                 EventService.RaiseEvent(EventType.ServerJoined, new JoinElementEventArgs<BaseServer>(member, this));
 
@@ -126,7 +127,7 @@ namespace Neo.Server
 
                     DataProvider.Save();
 
-                    Logger.Instance.Log(LogLevel.Info, $"{user.Value.Member.Identity.Name} (Id: {user.Value.Member.Identity.Id}) registered and joined the server.");
+                    Logger.Instance.Log(LogLevel.Info, $"{user.Value.Member.Identity.Name} (@{user.Value.Member.Identity.Id}) registered and joined the server.");
 
                     EventService.RaiseEvent(EventType.AccountCreated, new CreateElementEventArgs<Account>(user.Value.Member, user.Value.Account));
 
@@ -401,47 +402,50 @@ namespace Neo.Server
             }
         }
 
-        public override async Task OnConnect(Client client) {
-            Logger.Instance.Log(LogLevel.Debug, "New connection received");
+        public override async Task OnConnect(Client client, WebSocketSessionManager sessions) {
+            Logger.Instance.Log(LogLevel.Debug, $"New connection received from {sessions[client.ClientId].Context.UserEndPoint.Address}.");
             Clients.Add(client);
-            await EventService.RaiseEvent(EventType.Connected, new ConnectEventArgs(client));
+
+            EventService.RaiseEvent(EventType.Connected, new ConnectEventArgs(client, sessions[client.ClientId].Context.UserEndPoint.Address));
         }
 
         public override async Task OnDisconnect(string clientId, ushort code, string reason, bool wasClean) {
+            var user = GetUser(clientId);
+            var client = Clients.Find(_ => _.ClientId == clientId);
 
-            var client = Clients.Find(c => c.ClientId == clientId);
             Clients.Remove(client);
 
-            var user = GetUser(clientId);
             if (user != null) {
                 user.LeaveChannel(ChannelManager.GetMainChannel());
-                Logger.Instance.Log(LogLevel.Debug, $"{user.Identity.Name} left (Id: {user.Identity.Id})");
-                Users.Remove(user);
 
+                Users.Remove(user);
+                
                 if (user is Guest guest) {
                     GroupManager.RemoveGuestFromGroup(guest);
                 }
 
+                Logger.Instance.Log(LogLevel.Debug, $"{user.Identity.Name} (@{user.Identity.Id}) left the server.");
+
                 UserManager.RefreshUsers();
+
+                EventService.RaiseEvent(EventType.ServerLeft, new LeaveElementEventArgs<BaseServer>(user, this));
             }
 
-            await EventService.RaiseEvent(EventType.Disconnected, new DisconnectEventArgs(client, code, reason, wasClean));
-
+            EventService.RaiseEvent(EventType.Disconnected, new DisconnectEventArgs(client, code, reason, wasClean));
         }
 
         public override async Task OnError(string clientId, Exception ex, string message) { }
 
         public override async Task OnPackage(string clientId, Package package) {
-            var client = Clients.Find(c => c.ClientId == clientId);
+            var client = Clients.Find(_ => _.ClientId == clientId);
 
-            var beforeReceivePackageEvent = new Before<ReceiveElementEventArgs<Package>>(new ReceiveElementEventArgs<Package>(client, package));
-            await EventService.RaiseEvent(EventType.BeforePackageReceive, beforeReceivePackageEvent);
+            var beforePackageReceiveEvent = new Before<ReceiveElementEventArgs<Package>>(new ReceiveElementEventArgs<Package>(client, package));
+            EventService.RaiseEvent(EventType.BeforePackageReceive, beforePackageReceiveEvent);
 
-            if (!beforeReceivePackageEvent.Cancel) {
-                Logger.Instance.Log(LogLevel.Info, "Package received: " + package.Type);
+            if (!beforePackageReceiveEvent.Cancel) {
                 HandlePackage(client, package);
 
-                await EventService.RaiseEvent(EventType.PackageReceived, new ReceiveElementEventArgs<Package>(client, package));
+                EventService.RaiseEvent(EventType.PackageReceived, new ReceiveElementEventArgs<Package>(client, package));
             }
         }
     }
