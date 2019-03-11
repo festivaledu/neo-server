@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using Neo.Core.Networking;
+using Neo.Core.Shared;
 
 namespace Neo.Server
 {
@@ -36,7 +37,7 @@ namespace Neo.Server
             server.Stop();
             webServer.Stop();
 
-            Console.ReadLine();
+            Logger.Instance.Log(LogLevel.Ok, "You may now exit the program.", true);
         }
     }
 }
