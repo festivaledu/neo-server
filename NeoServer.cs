@@ -402,7 +402,10 @@ namespace Neo.Server
 
             } else if (package.Type == PackageType.CustomEvent) {
 
-                EventService.RaiseEvent(EventType.Custom, package.GetContentTypesafe<CustomEventArgs>());
+                var data = package.GetContentTypesafe<CustomEventArgs>();
+                data.Sender = GetUser(client).InternalId;
+
+                EventService.RaiseEvent(EventType.Custom, data);
 
             }
         }
