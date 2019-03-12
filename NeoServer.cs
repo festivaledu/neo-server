@@ -400,6 +400,10 @@ namespace Neo.Server
                 UserManager.RefreshAccounts();
                 UserManager.RefreshUsers();
 
+            } else if (package.Type == PackageType.CustomEvent) {
+
+                EventService.RaiseEvent(EventType.Custom, package.GetContentTypesafe<CustomEventArgs>());
+
             }
         }
 
