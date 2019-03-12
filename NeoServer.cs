@@ -91,7 +91,10 @@ namespace Neo.Server
 
                 if (!beforeInputEvent.Cancel) {
                     var channel = Channels.Find(_ => _.InternalId.Equals(data.TargetChannel));
+
                     channel.AddMessage(user, data.Input);
+
+                    EventService.RaiseEvent(EventType.Input, new InputEventArgs(user, data.Input));
                 }
 
             } else if (package.Type == PackageType.Register) {
@@ -424,15 +427,20 @@ namespace Neo.Server
             Clients.Remove(client);
 
             if (user != null) {
-                user.LeaveChannel(ChannelManager.GetMainChannel());
+                //user.LeaveChannel(ChannelManager.GetMainChannel());
+
+                Channels.ForEach(_ => _.ActiveMemberIds.Remove(user.InternalId));
+                ChannelManager.RefreshChannels();
 
                 Users.Remove(user);
                 
                 if (user is Guest guest) {
+                    Channels.FindAll(_ => _.MemberIds.Contains(user.InternalId)).ForEach(_ => user.LeaveChannel(_));
+                    
                     GroupManager.RemoveGuestFromGroup(guest);
                 }
 
-                Logger.Instance.Log(LogLevel.Debug, $"{user.Identity.Name} (@{user.Identity.Id}) left the server.");
+                Logger.Instance.Log(LogLevel.Info, $"{user.Identity.Name} (@{user.Identity.Id}) left the server.");
 
                 UserManager.RefreshUsers();
 
