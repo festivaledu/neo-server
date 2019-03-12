@@ -146,8 +146,11 @@ namespace Neo.Server
                     GroupManager.AddGuestToGroup(user as Guest);
                 }
 
-                if (user is Member member && member.Groups.Count == 0) {
-                    GroupManager.AddMemberToGroup(member, GroupManager.GetUserGroup());
+                if (user is Member member) {
+                    member.Account.IsOnline = true;
+                    if (member.Groups.Count == 0) {
+                        GroupManager.AddMemberToGroup(member, GroupManager.GetUserGroup());
+                    }
                 }
 
                 UserManager.RefreshAccounts();
@@ -438,6 +441,10 @@ namespace Neo.Server
                     Channels.FindAll(_ => _.MemberIds.Contains(user.InternalId)).ForEach(_ => user.LeaveChannel(_));
                     
                     GroupManager.RemoveGuestFromGroup(guest);
+                }
+
+                if (user is Member member) {
+                    member.Account.IsOnline = false;
                 }
 
                 Logger.Instance.Log(LogLevel.Info, $"{user.Identity.Name} (@{user.Identity.Id}) left the server.");
