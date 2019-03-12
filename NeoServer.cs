@@ -117,13 +117,14 @@ namespace Neo.Server
                     return;
                 }
 
+                user.Value.Member.Client = client;
+
                 var beforeAccountCreateEvent = new Before<CreateElementEventArgs<Account>>(new CreateElementEventArgs<Account>(user.Value.Member, user.Value.Account));
                 EventService.RaiseEvent(EventType.BeforeAccountCreate, beforeAccountCreateEvent);
 
                 if (!beforeAccountCreateEvent.Cancel) {
                     Accounts.Add(user.Value.Account);
                     Users.Add(user.Value.Member);
-                    user.Value.Member.Client = client;
 
                     DataProvider.Save();
 
@@ -138,10 +139,6 @@ namespace Neo.Server
 
                 var user = GetUser(client);
 
-                UserManager.RefreshAccounts();
-                GroupManager.RefreshGroups();
-                UserManager.RefreshUsers();
-
                 if (user.Attributes.ContainsKey("instance.neo.usertype") && user.Attributes["instance.neo.usertype"].ToString() == "guest") {
                     GroupManager.AddGuestToGroup(user as Guest);
                 }
@@ -149,6 +146,10 @@ namespace Neo.Server
                 if (user is Member member && member.Groups.Count == 0) {
                     GroupManager.AddMemberToGroup(member, GroupManager.GetUserGroup());
                 }
+
+                UserManager.RefreshAccounts();
+                GroupManager.RefreshGroups();
+                UserManager.RefreshUsers();
 
                 EventService.RaiseEvent(EventType.Login, new LoginEventArgs(user));
 
