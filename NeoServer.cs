@@ -148,7 +148,7 @@ namespace Neo.Server
 
                 if (user is Member member) {
                     member.Account.IsOnline = true;
-                    if (member.Groups.Count == 0) {
+                    if (member.Groups.Count == 0 && !member.InternalId.Equals(UserManager.GetRoot().InternalId)) {
                         GroupManager.AddMemberToGroup(member, GroupManager.GetUserGroup());
                     }
                 }
