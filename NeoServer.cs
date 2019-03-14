@@ -292,10 +292,13 @@ namespace Neo.Server
                 EventService.RaiseEvent(EventType.BeforeChannelCreate, beforeChannelCreateEvent);
 
                 if (!beforeChannelCreateEvent.Cancel) {
-                    user.CreateChannel(channel);
-                }
+                    var result = user.CreateChannel(channel);
+                    DataProvider.Save();
 
-                EventService.RaiseEvent(EventType.ChannelCreated, new CreateElementEventArgs<Channel>(user, channel));
+                    if (result) {
+                        EventService.RaiseEvent(EventType.ChannelCreated, new CreateElementEventArgs<Channel>(user, channel));
+                    }
+                }
 
             } else if (package.Type == PackageType.CreateGroup) {
 
@@ -313,10 +316,13 @@ namespace Neo.Server
 
                 if (!beforeGroupCreateEvent.Cancel) {
                     var result = GetUser(client.ClientId).CreateGroup(group);
+                    DataProvider.Save();
 
                     SendPackageTo(client, new Package(PackageType.CreateGroupResponse, result));
 
-                    EventService.RaiseEvent(EventType.GroupCreated, new CreateElementEventArgs<Group>(user, group));
+                    if (result == GroupActionResult.Success) {
+                        EventService.RaiseEvent(EventType.GroupCreated, new CreateElementEventArgs<Group>(user, group));
+                    }
                 }
 
             } else if (package.Type == PackageType.DeleteGroup) {
@@ -334,10 +340,13 @@ namespace Neo.Server
 
                 if (!beforeGroupRemoveEvent.Cancel) {
                     var result = @group.DeleteGroup(user);
+                    DataProvider.Save();
 
                     SendPackageTo(client, new Package(PackageType.DeleteGroupResponse, result));
 
-                    EventService.RaiseEvent(EventType.GroupRemoved, new RemoveElementEventArgs<Group>(user, group));
+                    if (result == GroupActionResult.Success) {
+                        EventService.RaiseEvent(EventType.GroupRemoved, new RemoveElementEventArgs<Group>(user, group));
+                    }
                 }
 
             } else if (package.Type == PackageType.DeleteChannel) {
@@ -355,10 +364,13 @@ namespace Neo.Server
 
                 if (!beforeChannelRemoveEvent.Cancel) {
                     var result = channel.DeleteChannel(user);
+                    DataProvider.Save();
 
                     SendPackageTo(client, new Package(PackageType.DeleteChannelResponse, result ? "Success" : "NotAllowed"));
 
-                    EventService.RaiseEvent(EventType.ChannelRemoved, new RemoveElementEventArgs<Channel>(user, channel));
+                    if (result) {
+                        EventService.RaiseEvent(EventType.ChannelRemoved, new RemoveElementEventArgs<Channel>(user, channel));
+                    }
                 }
 
             } else if (package.Type == PackageType.DeletePunishment) {
@@ -395,6 +407,7 @@ namespace Neo.Server
 
                 user.Identity.AvatarFileExtension = data.FileExtension;
                 user.Attributes["neo.avatar.updated"] = DateTime.Now;
+                DataProvider.Save();
 
                 EventService.RaiseEvent(EventType.AccountEdited, new EditElementEventArgs<Account>(user, (user as Member).Account));
 
@@ -412,7 +425,7 @@ namespace Neo.Server
         }
 
         public override async Task OnConnect(Client client, WebSocketSessionManager sessions) {
-            Logger.Instance.Log(LogLevel.Debug, $"New connection received from {sessions[client.ClientId].Context.UserEndPoint.Address}.");
+            Logger.Instance.Log(LogLevel.Info, $"New connection received from {sessions[client.ClientId].Context.UserEndPoint.Address}.");
             Clients.Add(client);
 
             EventService.RaiseEvent(EventType.Connected, new ConnectEventArgs(client, sessions[client.ClientId].Context.UserEndPoint.Address));
