@@ -217,8 +217,6 @@ namespace Neo.Server
 
                         member.Account.Email = data.Value.ToString();
                     } else if (data.Key == "password") {
-                        // TODO: Check current password and set new one
-
                         var passwords = JsonConvert.DeserializeObject<string[]>(JsonConvert.SerializeObject(data.Value));
                         if (!member.Account.Password.SequenceEqual(Convert.FromBase64String(passwords[0]))) {
                             user.ToTarget().SendPackage(new Package(PackageType.EditProfileResponse, new EditProfileResponsePackageContent(null, null, data)));
@@ -250,7 +248,6 @@ namespace Neo.Server
                 var target = Users.Find(_ => _.InternalId.Equals(data.Target));
 
                 if (!user.IsAuthorized("neo.moderate." + data.Action)) {
-                    // TODO: Maybe send error back to client
                     return;
                 }
 
@@ -277,8 +274,6 @@ namespace Neo.Server
 
                     break;
                 }
-
-                // TODO: Maybe add punishment event
 
             } else if (package.Type == PackageType.CreateChannel) {
 
@@ -317,7 +312,7 @@ namespace Neo.Server
                 EventService.RaiseEvent(EventType.BeforeGroupCreate, beforeGroupCreateEvent);
 
                 if (!beforeGroupCreateEvent.Cancel) {
-                    var result = GroupManager.CreateGroup(group, GetUser(client.ClientId));
+                    var result = GetUser(client.ClientId).CreateGroup(group);
 
                     SendPackageTo(client, new Package(PackageType.CreateGroupResponse, result));
 
@@ -338,7 +333,7 @@ namespace Neo.Server
                 EventService.RaiseEvent(EventType.BeforeGroupRemove, beforeGroupRemoveEvent);
 
                 if (!beforeGroupRemoveEvent.Cancel) {
-                    var result = GroupManager.DeleteGroup(group, user);
+                    var result = @group.DeleteGroup(user);
 
                     SendPackageTo(client, new Package(PackageType.DeleteGroupResponse, result));
 
@@ -430,8 +425,6 @@ namespace Neo.Server
             Clients.Remove(client);
 
             if (user != null) {
-                //user.LeaveChannel(ChannelManager.GetMainChannel());
-
                 Channels.ForEach(_ => _.ActiveMemberIds.Remove(user.InternalId));
                 ChannelManager.RefreshChannels();
 
